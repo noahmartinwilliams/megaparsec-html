@@ -20,6 +20,17 @@ test01 = do
     else 
         let (Left err) = result in putStrLn (errorBundlePretty err)
 
+test02 :: IO ()
+test02 = do
+    let tag = "</tag>"
+        result = parse (htmlEndTag "tag") "" (T.pack tag)
+    if isRight result 
+    then do
+        putStrLn "Test 02 succeeded."
+    else 
+        let (Left err) = result in putStrLn (errorBundlePretty err)
+
 main :: IO ()
 main = do
     test01
+    test02
