@@ -38,6 +38,7 @@ library:
   dependencies:
   - megaparsec
   - text
+  - containers
 
 tests:
   megaparsec-html-test:
@@ -51,3 +52,4 @@ tests:
     - megaparsec-html
     - megaparsec
     - text
+    - containers

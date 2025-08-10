@@ -4,6 +4,7 @@ import Text.Megaparsec
 import Text.Megaparsec.HTML.Tags
 import qualified Data.Text as T
 import Data.Either
+import Text.Megaparsec.HTML.Types
 
 test01 :: IO ()
 test01 = do
@@ -30,7 +31,23 @@ test02 = do
     else 
         let (Left err) = result in putStrLn (errorBundlePretty err)
 
+test03 :: IO ()
+test03 = do
+    let tag = "<tag attr=\"1\"/>"
+        result = parse (htmlSingleTag ) "" (T.pack tag)
+    if isRight result 
+    then do
+        let (Right (SingleTag name _)) = result
+        if name == (T.pack "tag")
+        then do
+            putStrLn "Test 03 succeeded."
+        else do
+            putStrLn "Test 03 failed."
+    else 
+        let (Left err) = result in putStrLn (errorBundlePretty err)
+
 main :: IO ()
 main = do
     test01
     test02
+    test03
