@@ -12,13 +12,14 @@ import Data.Map
 import Text.Megaparsec.HTML.Space as S
 import Text.Megaparsec.HTML.Types 
 
-htmlBeginTag :: Parser String
+htmlBeginTag :: Parser (String, [(Text, Text)])
 htmlBeginTag = do
     void $ single '<'
     notFollowedBy (single '/')
     name <- some alphaNumChar
+    attrs <- S.lexeme htmlAttrs
     void $ S.lexeme (single '>')
-    return name
+    return (name, attrs)
 
 htmlEndTag :: String -> Parser ()
 htmlEndTag name = do
@@ -34,7 +35,7 @@ htmlSingleTag = do
     attrs <- htmlAttrs 
     let attrs2 = Data.Map.fromList attrs
     void $ S.lexeme (string (T.pack "/>"))
-    return (SingleTag (T.pack name) attrs2)
+    return (Node (T.pack name) attrs2 [])
 
 htmlAttr :: Parser (Text, Text)
 htmlAttr = do
@@ -56,3 +57,10 @@ htmlString = do
 
 htmlAttrs :: Parser [(Text, Text)]
 htmlAttrs = many htmlAttr
+
+htmlNode :: Parser Tag
+htmlNode = do
+    (name, attrs) <- try htmlBeginTag
+    nodes <- many (try (htmlNode <|> htmlSingleTag))
+    void $ htmlEndTag name
+    return (Node (T.pack name) (Data.Map.fromList attrs) nodes)

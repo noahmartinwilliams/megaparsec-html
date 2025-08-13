@@ -7,4 +7,4 @@ import Text.Megaparsec
 
 type Parser = Parsec Void Text
 
-data Tag = SingleTag Text (Map Text Text) deriving(Show, Eq)
+data Tag = Node Text (Map Text Text) [Tag]  deriving(Show, Eq)

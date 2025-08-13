@@ -13,7 +13,7 @@ test01 = do
     if isRight result 
     then do
         let (Right result') = result
-        if result' == "tag"
+        if result' == ("tag", [])
         then
             putStrLn "Test 01 succeeded."
         else
@@ -37,7 +37,7 @@ test03 = do
         result = parse (htmlSingleTag ) "" (T.pack tag)
     if isRight result 
     then do
-        let (Right (SingleTag name _)) = result
+        let (Right (Node name _ _)) = result
         if name == (T.pack "tag")
         then do
             putStrLn "Test 03 succeeded."
@@ -46,8 +46,25 @@ test03 = do
     else 
         let (Left err) = result in putStrLn (errorBundlePretty err)
 
+test04 :: IO ()
+test04 = do
+    let tag = "<body><tag attr=\"1\"/><h1><br/></h1></body>"
+        result = parse (htmlNode) "" (T.pack tag)
+    if isRight result 
+    then do
+        let (Right (Node name _ l)) = result
+        if (name == (T.pack "body")) && ((Prelude.length l) == 2)
+        then do
+            putStrLn "Test 04 succeeded."
+        else do
+            putStrLn ("Test 04 failed. Got: " ++ (show result))
+    else 
+        let (Left err) = result in putStrLn (errorBundlePretty err)
+
+
 main :: IO ()
 main = do
     test01
     test02
     test03
+    test04
