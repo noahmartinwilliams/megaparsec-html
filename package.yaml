@@ -39,6 +39,8 @@ library:
   - megaparsec
   - text
   - containers
+  - megaparsec-js
+  - mtl
 
 tests:
   megaparsec-html-test:
@@ -53,3 +55,5 @@ tests:
     - megaparsec
     - text
     - containers
+    - mtl
+    - megaparsec-js

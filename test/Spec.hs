@@ -5,6 +5,7 @@ import Text.Megaparsec.HTML.Tags
 import qualified Data.Text as T
 import Data.Either
 import Text.Megaparsec.HTML.Types
+import Text.Megaparsec.JS
 
 test01 :: IO ()
 test01 = do
@@ -62,9 +63,25 @@ test04 = do
         let (Left err) = result in putStrLn (errorBundlePretty err)
 
 
+test05 :: IO ()
+test05 = do
+    let tag = "<script type=\"text/javascript\">function f(a) { return a + 1; }</script>"
+        result = parse (htmlNode) "" (T.pack tag)
+    if isRight result 
+    then do
+        let (Right (JSNode _ _ doc)) = result
+            (Text.Megaparsec.JS.Doc l) = doc
+        if (Prelude.length l) == 1
+        then do
+            putStrLn "Test 05 succeeded."
+        else do
+            putStrLn ("Test 05 failed. Got: " ++ (show result))
+    else 
+        let (Left err) = result in putStrLn (errorBundlePretty err)
 main :: IO ()
 main = do
     test01
     test02
     test03
     test04
+    test05

@@ -65,3 +65,7 @@ packages:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
+
+extra-deps:
+- git: https://github.com/noahmartinwilliams/megaparsec-js.git
+  commit: 37c83f99d014dec613b1e9d06f7246676dd0c1b6
