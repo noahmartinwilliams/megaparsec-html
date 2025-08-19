@@ -33,6 +33,18 @@ ghc-options:
 - -Wpartial-fields
 - -Wredundant-constraints
 
+executables:
+  htmlChecker:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+    - -threaded 
+    dependencies:
+    - megaparsec
+    - megaparsec-html
+    - text
+    - parallel
+
 library:
   source-dirs: src
   dependencies:
