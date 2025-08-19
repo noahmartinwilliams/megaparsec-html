@@ -78,6 +78,22 @@ test05 = do
             putStrLn ("Test 05 failed. Got: " ++ (show result))
     else 
         let (Left err) = result in putStrLn (errorBundlePretty err)
+
+test06 :: IO ()
+test06 = do
+    let tag = "<html><body onload=\"doStuff()\"><h1><br/></h1><h2><br/></h2></body></html>"
+        result = parse (htmlNode) "" (T.pack tag)
+    if isRight result 
+    then do
+        let (Right (Node _ _ result')) = result
+        if (length result') == 1
+        then do
+            putStrLn "Test 06 succeeded."
+        else do
+            putStrLn ("Test 06 failed. Got: " ++ (show result'))
+    else 
+        let (Left err) = result in putStrLn (errorBundlePretty err)
+
 main :: IO ()
 main = do
     test01
@@ -85,3 +101,4 @@ main = do
     test03
     test04
     test05
+    test06

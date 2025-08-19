@@ -21,6 +21,7 @@ htmlBeginTag = do
     notFollowedBy (single '/')
     name <- S.lexeme (some alphaNumChar)
     attrs <- S.lexeme htmlAttrs
+    notFollowedBy (single '/')
     void $ S.lexeme (single '>')
     return (name, attrs)
 
