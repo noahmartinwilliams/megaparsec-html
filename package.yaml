@@ -52,6 +52,7 @@ library:
   - text
   - containers
   - megaparsec-js
+  - megaparsec-css
   - mtl
 
 tests:

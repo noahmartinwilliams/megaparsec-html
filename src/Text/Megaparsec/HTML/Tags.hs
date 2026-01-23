@@ -5,53 +5,55 @@ module Text.Megaparsec.HTML.Tags where
 import Control.Monad
 import Control.Monad.State
 import Data.Either
+import Data.Functor.Identity
 import Data.Map
-import Data.Text as T
+import Data.Set
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer
+import Text.Megaparsec.CSS as CSS
 import Text.Megaparsec.HTML.Space as S
 import Text.Megaparsec.HTML.Types as HTML
 import Text.Megaparsec.JS as JS
 
-htmlBeginTag :: HTML.Parser (String, [(Text, Text)])
+htmlBeginTag :: HTMLParser (String, [(String, String)])
 htmlBeginTag = do
     void $ single '<'
-    notFollowedBy (single '/')
+    void $ notFollowedBy (single '/')
     name <- S.lexeme (some alphaNumChar)
     attrs <- S.lexeme htmlAttrs
-    notFollowedBy (single '/')
+    void $ notFollowedBy (S.lexeme (single '/'))
     void $ S.lexeme (single '>')
     return (name, attrs)
 
-htmlEndTag :: String -> HTML.Parser ()
+htmlEndTag :: String -> HTMLParser ()
 htmlEndTag name = do
     void $ S.lexeme ( single '<')
     void $ single '/'
-    void $ S.lexeme (string (T.pack name))
+    void $ S.lexeme (string name)
     void $ S.lexeme (single '>')
 
-htmlSingleTag :: HTML.Parser Tag
+htmlSingleTag :: HTMLParser Tag
 htmlSingleTag = do
     void $ S.lexeme (single '<')
     name <- S.lexeme (some alphaNumChar)
     attrs <- htmlAttrs 
     let attrs2 = Data.Map.fromList attrs
-    void $ S.lexeme (string (T.pack "/>"))
-    return (Node (T.pack name) attrs2 [])
+    void $ S.lexeme (string "/>")
+    return (Node name attrs2 [])
 
-htmlAttr :: HTML.Parser (Text, Text)
+htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
     name <- S.lexeme (some alphaNumChar)
     void $ S.lexeme (single '=')
     val <- S.lexeme (htmlString)
-    return ((T.pack name), val)
+    return (name, val)
 
-htmlString :: HTML.Parser Text
+htmlString :: HTMLParser String
 htmlString = do
     str <- char '"' *> manyTill charInString (char '"') 
-    return (T.pack str) where
+    return str where
         charInString = try (char '\\' *> escapedChar) <|> satisfy (/= '"')
         escapedChar = 
             (char 'n' >> return '\n') <|>
@@ -59,27 +61,50 @@ htmlString = do
             (char '"' >> return '"' ) <|>
             (char '\\' >> return '\\')
 
-htmlAttrs :: HTML.Parser [(Text, Text)]
+htmlAttrs :: HTMLParser [(String, String)]
 htmlAttrs = many htmlAttr
 
-htmlEmbeddedJS :: HTML.Parser (JS.Doc, Text.Megaparsec.State Text Void)
+htmlEmbeddedJS :: HTMLParser (JS.Doc, Text.Megaparsec.State String Void)
 htmlEmbeddedJS = do
     i <- getInput
     let (jsr, _) = runState (runParserT jsDoc "<inline javascript>" i) JS.jsInitialState
-    let (Right (jsd, st@(Text.Megaparsec.State { stateInput = sti}))) = jsr
-    let (Text.Megaparsec.State { stateOffset = so }) = st
+        (Right (jsd, st@(Text.Megaparsec.State { stateInput = sti}))) = jsr
+        (Text.Megaparsec.State { stateOffset = so }) = st
     setInput sti
     return (jsd, st)
 
-htmlNode :: HTML.Parser Tag
+htmlEmbeddedCSS :: HTMLParser [CSS.RuleSet]
+htmlEmbeddedCSS = do
+    i <- getInput
+    o <- getOffset
+    st' <- getParserState
+    let st = State { stateInput = i, stateOffset = o, stateParseErrors = [], statePosState = (statePosState st') }
+        css = (runParser' cssRuleSets st) 
+        (Text.Megaparsec.State { stateInput = sti}, cssDE) = css
+    if isLeft cssDE
+    then
+        let (Left a) = cssDE in fancyFailure (Data.Set.fromList [ErrorFail (errorBundlePretty a)])
+    else do
+        let (Right cssD) = cssDE
+        setInput sti
+        return cssD
+
+htmlNode :: HTMLParser Tag
 htmlNode = do
-    (name, attrs) <- try htmlBeginTag
+    (name, attrs) <- htmlBeginTag
+    let name' = name
+        attrs' = Data.Map.fromList attrs
     if name == "script"
     then do
         (jsd, _) <- htmlEmbeddedJS
         void $ htmlEndTag name
-        return (JSNode (T.pack name) (Data.Map.fromList attrs) jsd)
-    else do
-        nodes <- many (try (htmlNode <|> htmlSingleTag))
+        return (JSNode name' attrs' jsd)
+    else if name == "style"
+    then do
+        cssd <- htmlEmbeddedCSS
         void $ htmlEndTag name
-        return (Node (T.pack name) (Data.Map.fromList attrs) nodes)
+        return (CSSNode name' attrs' cssd)
+    else do
+        nodes <- many ((htmlNode) <|> (htmlSingleTag))
+        void $ htmlEndTag name
+        return (Node name' attrs' nodes)
