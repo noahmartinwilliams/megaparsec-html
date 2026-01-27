@@ -8,7 +8,9 @@ import Text.Megaparsec.JS as JS
 
 type HTMLParser = Parsec Void String
 
-data Tag = CSSNode String (Map String String) CSSDoc | JSNode String (Map String String) JS.Doc | Node String (Map String String) [Tag]  deriving(Show, Eq)
+data Symbol = SymMulti [Tag] | SymBeginTag String [(String, String)] | SymTag Tag | SymEndTag String deriving(Show, Eq)
+
+data Tag = CSSNode String (Map String String) CSSDoc | JSNode String (Map String String) JS.Doc | Node String (Map String String) [Tag] | TextNode String deriving(Show, Eq)
 
 data DTD = DTD String String deriving(Show, Eq)
 

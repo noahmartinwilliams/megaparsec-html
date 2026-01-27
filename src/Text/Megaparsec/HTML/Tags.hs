@@ -9,39 +9,61 @@ import Data.Functor.Identity
 import Data.Map
 import Data.Set
 import Data.Void
+import Debug.Trace
 import Text.Megaparsec
-import Text.Megaparsec.Char
+import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.Char.Lexer
 import Text.Megaparsec.CSS as CSS
 import Text.Megaparsec.HTML.Space as S
+import Text.Megaparsec.HTML.Text
 import Text.Megaparsec.HTML.Types as HTML
 import Text.Megaparsec.JS as JS
 
-htmlBeginTag :: HTMLParser (String, [(String, String)])
+htmlBeginTag :: HTMLParser Symbol
 htmlBeginTag = do
     void $ single '<'
     void $ notFollowedBy (single '/')
-    name <- S.lexeme (some alphaNumChar)
-    attrs <- S.lexeme htmlAttrs
-    void $ notFollowedBy (S.lexeme (single '/'))
-    void $ S.lexeme (single '>')
-    return (name, attrs)
+    name <- (some alphaNumChar)
+    void $ Ch.space
+    attrs <- htmlAttrs
+    void $ Ch.space
+    void $ notFollowedBy (single '/')
+    void $ (single '>')
+    if name == "script"
+    then do
+        (jsd, _) <- htmlEmbeddedJS
+        void $ htmlEndTag 
+        return (SymTag (JSNode name (Data.Map.fromList attrs) jsd))
+    else if name == "style"
+    then do
+        cssd <- htmlEmbeddedCSS
+        void $ htmlEndTag 
+        return (SymTag (CSSNode name (Data.Map.fromList attrs) cssd))
+    else
+        return (SymBeginTag name attrs)
 
-htmlEndTag :: String -> HTMLParser ()
-htmlEndTag name = do
-    void $ S.lexeme ( single '<')
-    void $ single '/'
-    void $ S.lexeme (string name)
-    void $ S.lexeme (single '>')
+htmlEndTag :: HTMLParser Symbol
+htmlEndTag = do
+    void $ lookAhead (string "</")
+    void $ string "</"
+    void $ Ch.space
+    ident <- some (alphaNumChar)
+    void $ Ch.space
+    void $ (single '>')
+    return (SymEndTag ident)
 
-htmlSingleTag :: HTMLParser Tag
+htmlSingleTag :: HTMLParser Symbol
 htmlSingleTag = do
     void $ S.lexeme (single '<')
-    name <- S.lexeme (some alphaNumChar)
+    void $ notFollowedBy (single '/')
+    void $ Ch.space
+    name <- (some alphaNumChar)
+    void $ Ch.space
     attrs <- htmlAttrs 
     let attrs2 = Data.Map.fromList attrs
-    void $ S.lexeme (string "/>")
-    return (Node name attrs2 [])
+    void $ Ch.space
+    void $ (string "/>")
+    return (SymTag (Node name attrs2 []))
 
 htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
@@ -68,10 +90,14 @@ htmlEmbeddedJS :: HTMLParser (JS.Doc, Text.Megaparsec.State String Void)
 htmlEmbeddedJS = do
     i <- getInput
     let (jsr, _) = runState (runParserT jsDoc "<inline javascript>" i) JS.jsInitialState
-        (Right (jsd, st@(Text.Megaparsec.State { stateInput = sti}))) = jsr
-        (Text.Megaparsec.State { stateOffset = so }) = st
-    setInput sti
-    return (jsd, st)
+    if isLeft jsr
+    then
+        let (Left err) = jsr in fancyFailure (Data.Set.fromList [ErrorFail (errorBundlePretty err)])
+    else do
+        let (Right (jsd, st@(Text.Megaparsec.State { stateInput = sti}))) = jsr
+            (Text.Megaparsec.State { stateOffset = so }) = st
+        setInput sti
+        return (jsd, st)
 
 htmlEmbeddedCSS :: HTMLParser CSSDoc
 htmlEmbeddedCSS = do
@@ -90,22 +116,48 @@ htmlEmbeddedCSS = do
         setOffset sto
         return cssD
 
+htmlText :: HTMLParser Symbol
+htmlText = do
+    t <- htmlTextNode
+    return (SymTag t)
+
 htmlNode :: HTMLParser Tag
 htmlNode = do
-    (name, attrs) <- htmlBeginTag
-    let name' = name
-        attrs' = Data.Map.fromList attrs
-    if name == "script"
-    then do
-        (jsd, _) <- htmlEmbeddedJS
-        void $ htmlEndTag name
-        return (JSNode name' attrs' jsd)
-    else if name == "style"
-    then do
-        cssd <- htmlEmbeddedCSS
-        void $ htmlEndTag name
-        return (CSSNode name' attrs' cssd)
-    else do
-        nodes <- many ((htmlNode) <|> (htmlSingleTag))
-        void $ htmlEndTag name
-        return (Node name' attrs' nodes)
+    nodes <- some (try htmlText <|> try htmlBeginTag <|> try htmlEndTag <|> try htmlSingleTag)
+    let (node1 : _) = nodes
+    if (isBeginTag node1)
+    then
+        let (t, _) = treeify nodes in return t
+    else
+        fancyFailure (Data.Set.fromList [ErrorFail "Document does not begin with a start tag."])
+
+isBeginTag :: Symbol -> Bool
+isBeginTag (SymBeginTag _ _ ) = True
+isBeginTag _ = False
+
+isEndTag :: String -> Symbol -> Bool
+isEndTag n (SymEndTag n') | n == n' = True
+isEndTag _ _ = False
+
+treeify :: [Symbol] -> (Tag, [Symbol])
+treeify l | trace ((show l) ++ "\n") False = undefined
+
+treeify [(SymMulti ts)] = (Node "html" Data.Map.empty ts, [])
+
+treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymEndTag name') : rest) = (Node name (Data.Map.fromList attrs) ts, rest)
+
+treeify ((SymTag t) : rest) = treeify ((SymMulti [t]) : rest)
+
+treeify ((SymMulti ts) : (SymTag t) : rest) = treeify ((SymMulti (ts ++ [t])) : rest)
+
+treeify ((SymBeginTag name attrs) : (SymTag t) : rest) = treeify ((SymBeginTag name attrs) : (SymMulti [t]) : rest)
+
+treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymTag t) : rest) = treeify ((SymBeginTag name attrs) : (SymMulti (ts ++ [t])) : rest)
+
+treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymEndTag name') : rest) | name == name' = treeify ((SymTag (Node name (Data.Map.fromList attrs) ts)) : rest)
+
+treeify ((SymBeginTag name attrs) : (SymBeginTag name' attrs') : rest) = let (t, syms) = treeify ((SymBeginTag name' attrs') : rest) in 
+    treeify ((SymBeginTag name attrs) : (SymTag t) : syms)
+
+treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymBeginTag name' attrs') : rest) = let (t, syms) = treeify ((SymBeginTag name' attrs') : rest) in 
+    treeify ((SymBeginTag name attrs) : (SymMulti (ts ++ [t])) : syms)
