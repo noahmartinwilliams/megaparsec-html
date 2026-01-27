@@ -45,7 +45,7 @@ htmlSingleTag = do
 
 htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
-    name <- S.lexeme (some alphaNumChar)
+    name <- S.lexeme (some (alphaNumChar <|> single '-'))
     void $ S.lexeme (single '=')
     val <- S.lexeme (htmlString)
     return (name, val)
@@ -73,20 +73,21 @@ htmlEmbeddedJS = do
     setInput sti
     return (jsd, st)
 
-htmlEmbeddedCSS :: HTMLParser [CSS.RuleSet]
+htmlEmbeddedCSS :: HTMLParser CSSDoc
 htmlEmbeddedCSS = do
     i <- getInput
     o <- getOffset
     st' <- getParserState
     let st = State { stateInput = i, stateOffset = o, stateParseErrors = [], statePosState = (statePosState st') }
-        css = (runParser' cssRuleSets st) 
-        (Text.Megaparsec.State { stateInput = sti}, cssDE) = css
+        css = (runParser' cssDoc st) 
+        (Text.Megaparsec.State { stateOffset = sto, stateInput = sti}, cssDE) = css
     if isLeft cssDE
     then
         let (Left a) = cssDE in fancyFailure (Data.Set.fromList [ErrorFail (errorBundlePretty a)])
     else do
         let (Right cssD) = cssDE
         setInput sti
+        setOffset sto
         return cssD
 
 htmlNode :: HTMLParser Tag
