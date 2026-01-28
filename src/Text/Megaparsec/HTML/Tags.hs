@@ -9,7 +9,6 @@ import Data.Functor.Identity
 import Data.Map
 import Data.Set
 import Data.Void
-import Debug.Trace
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.Char.Lexer
@@ -127,7 +126,7 @@ htmlNode = do
     let (node1 : _) = nodes
     if (isBeginTag node1)
     then
-        let (t, _) = treeify nodes in return t
+        return (treeify nodes [])
     else
         fancyFailure (Data.Set.fromList [ErrorFail "Document does not begin with a start tag."])
 
@@ -139,25 +138,18 @@ isEndTag :: String -> Symbol -> Bool
 isEndTag n (SymEndTag n') | n == n' = True
 isEndTag _ _ = False
 
-treeify :: [Symbol] -> (Tag, [Symbol])
-treeify l | trace ((show l) ++ "\n") False = undefined
+treeify :: [Symbol] -> [Symbol] -> Tag
 
-treeify [(SymMulti ts)] = (Node "html" Data.Map.empty ts, [])
+treeify [] [SymTag t] = t
 
-treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymEndTag name') : rest) = (Node name (Data.Map.fromList attrs) ts, rest)
+treeify [] [(SymMulti ts)] = Node "html" Data.Map.empty ts
 
-treeify ((SymTag t) : rest) = treeify ((SymMulti [t]) : rest)
+treeify input ((SymTag t) : rest) = treeify input ((SymMulti [t]) : rest)
 
-treeify ((SymMulti ts) : (SymTag t) : rest) = treeify ((SymMulti (ts ++ [t])) : rest)
+treeify input ((SymTag t) : (SymMulti ts) : rest) = treeify input ((SymMulti (ts ++ [t])) : rest)
 
-treeify ((SymBeginTag name attrs) : (SymTag t) : rest) = treeify ((SymBeginTag name attrs) : (SymMulti [t]) : rest)
+treeify input ((SymEndTag name) : (SymMulti ts) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Node name (Data.Map.fromList attrs) ts)) : rest)
 
-treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymTag t) : rest) = treeify ((SymBeginTag name attrs) : (SymMulti (ts ++ [t])) : rest)
+treeify input ((SymEndTag name) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Node name (Data.Map.fromList attrs) [])) : rest)
 
-treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymEndTag name') : rest) | name == name' = treeify ((SymTag (Node name (Data.Map.fromList attrs) ts)) : rest)
-
-treeify ((SymBeginTag name attrs) : (SymBeginTag name' attrs') : rest) = let (t, syms) = treeify ((SymBeginTag name' attrs') : rest) in 
-    treeify ((SymBeginTag name attrs) : (SymTag t) : syms)
-
-treeify ((SymBeginTag name attrs) : (SymMulti ts) : (SymBeginTag name' attrs') : rest) = let (t, syms) = treeify ((SymBeginTag name' attrs') : rest) in 
-    treeify ((SymBeginTag name attrs) : (SymMulti (ts ++ [t])) : syms)
+treeify (a : rest) stack = treeify rest (a : stack)
