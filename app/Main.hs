@@ -16,7 +16,7 @@ parser (contents, fname) = do
     then
         let (Left bundle) = res in (False, (errorBundlePretty bundle))
     else
-        (True, "")
+        let (Right res') = res in (True, show res')
 
 openEach :: [String] -> IO [String]
 openEach [] = return []

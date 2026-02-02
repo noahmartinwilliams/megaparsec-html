@@ -1,17 +1,14 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Text.Megaparsec.HTML.Tags where
 
 import Control.Monad
 import Control.Monad.State
 import Data.Either
-import Data.Functor.Identity
 import Data.Map
 import Data.Set
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
-import Text.Megaparsec.Char.Lexer
 import Text.Megaparsec.CSS as CSS
 import Text.Megaparsec.HTML.Space as S
 import Text.Megaparsec.HTML.Text
@@ -30,9 +27,10 @@ htmlBeginTag = do
     void $ (single '>')
     if name == "script"
     then do
-        (jsd, _) <- htmlEmbeddedJS
-        void $ htmlEndTag 
-        return (SymTag (JSNode name (Data.Map.fromList attrs) jsd))
+        jsd <- htmlEmbeddedJS
+        void $ htmlEndTag
+        let (jsd', _) = jsd
+        return (SymTag (JSNode name (Data.Map.fromList attrs) jsd'))
     else if name == "style"
     then do
         cssd <- htmlEmbeddedCSS
@@ -88,15 +86,19 @@ htmlAttrs = many htmlAttr
 htmlEmbeddedJS :: HTMLParser (JS.Doc, Text.Megaparsec.State String Void)
 htmlEmbeddedJS = do
     i <- getInput
-    let (jsr, _) = runState (runParserT jsDoc "<inline javascript>" i) JS.jsInitialState
+    o <- getOffset
+    st <- getParserState
+    let st' = State { stateInput = i, stateOffset = o, statePosState = (statePosState st), stateParseErrors = []}
+        ((st'', jsr), _) = runState (runParserT' jsDoc st' ) JS.jsInitialState
     if isLeft jsr
     then
-        let (Left err) = jsr in fancyFailure (Data.Set.fromList [ErrorFail (errorBundlePretty err)])
+        let (Left err) = jsr in fancyFailure (Data.Set.fromList [(ErrorFail (errorBundlePretty err))])
     else do
-        let (Right (jsd, st@(Text.Megaparsec.State { stateInput = sti}))) = jsr
-            (Text.Megaparsec.State { stateOffset = so }) = st
-        setInput sti
-        return (jsd, st)
+        let (Right (jsd, _)) = jsr
+            (Text.Megaparsec.State { stateOffset = so, stateInput = si }) = st''
+        setInput si
+        setOffset so
+        return (jsd, st'')
 
 htmlEmbeddedCSS :: HTMLParser CSSDoc
 htmlEmbeddedCSS = do
@@ -134,19 +136,21 @@ isBeginTag :: Symbol -> Bool
 isBeginTag (SymBeginTag _ _ ) = True
 isBeginTag _ = False
 
-isEndTag :: String -> Symbol -> Bool
-isEndTag n (SymEndTag n') | n == n' = True
-isEndTag _ _ = False
-
 treeify :: [Symbol] -> [Symbol] -> Tag
 
 treeify [] [SymTag t] = t
 
+treeify [] [SymTag t, SymMulti [(TextNode "\n")]] = t
+
 treeify [] [(SymMulti ts)] = Node "html" Data.Map.empty ts
+
+treeify input ((SymTag t) : (SymMulti ts) : rest) = treeify input ((SymMulti (ts ++ [t])) : rest)
 
 treeify input ((SymTag t) : rest) = treeify input ((SymMulti [t]) : rest)
 
-treeify input ((SymTag t) : (SymMulti ts) : rest) = treeify input ((SymMulti (ts ++ [t])) : rest)
+treeify input ((SymBeginTag "link" attrs) : rest) = treeify input ((SymTag (Node "link" (Data.Map.fromList attrs) [])) : rest)
+
+treeify input ((SymBeginTag "meta" attrs) : rest) = treeify input ((SymTag (Node "meta" (Data.Map.fromList attrs) [])) : rest)
 
 treeify input ((SymEndTag name) : (SymMulti ts) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Node name (Data.Map.fromList attrs) ts)) : rest)
 
