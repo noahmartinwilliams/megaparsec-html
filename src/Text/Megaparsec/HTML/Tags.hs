@@ -6,6 +6,7 @@ import Control.Monad.State
 import Data.Either
 import Data.Map
 import Data.Set
+import Data.Tree as Tree
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
@@ -14,6 +15,8 @@ import Text.Megaparsec.HTML.Space as S
 import Text.Megaparsec.HTML.Text
 import Text.Megaparsec.HTML.Types as HTML
 import Text.Megaparsec.JS as JS
+
+data Symbol = SymMulti (Tree Tag) | SymBeginTag String [(String, String)] | SymTag (Tree Tag) | SymEndTag String deriving(Show, Eq)
 
 htmlBeginTag :: HTMLParser Symbol
 htmlBeginTag = do
@@ -30,12 +33,12 @@ htmlBeginTag = do
         jsd <- htmlEmbeddedJS
         void $ htmlEndTag
         let (jsd', _) = jsd
-        return (SymTag (JSNode name (Data.Map.fromList attrs) jsd'))
+        return (SymTag (Tree.Node (JSNode name (Data.Map.fromList attrs) jsd') []))
     else if name == "style"
     then do
         cssd <- htmlEmbeddedCSS
         void $ htmlEndTag 
-        return (SymTag (CSSNode name (Data.Map.fromList attrs) cssd))
+        return (SymTag (Tree.Node (CSSNode name (Data.Map.fromList attrs) cssd) []))
     else
         return (SymBeginTag name attrs)
 
@@ -60,7 +63,7 @@ htmlSingleTag = do
     let attrs2 = Data.Map.fromList attrs
     void $ Ch.space
     void $ (string "/>")
-    return (SymTag (Node name attrs2 []))
+    return (SymTag (Tree.Node (HTML.Node name attrs2) []))
 
 htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
@@ -120,9 +123,9 @@ htmlEmbeddedCSS = do
 htmlText :: HTMLParser Symbol
 htmlText = do
     t <- htmlTextNode
-    return (SymTag t)
+    return (SymTag (Tree.Node t []))
 
-htmlNode :: HTMLParser Tag
+htmlNode :: HTMLParser (Tree Tag)
 htmlNode = do
     nodes <- some (try htmlText <|> try htmlBeginTag <|> try htmlEndTag <|> try htmlSingleTag)
     let (node1 : _) = nodes
@@ -136,24 +139,24 @@ isBeginTag :: Symbol -> Bool
 isBeginTag (SymBeginTag _ _ ) = True
 isBeginTag _ = False
 
-treeify :: [Symbol] -> [Symbol] -> Tag
+treeify :: [Symbol] -> [Symbol] -> Tree Tag
 
 treeify [] [SymTag t] = t
 
-treeify [] [SymTag t, SymMulti [(TextNode "\n")]] = t
+treeify [] [SymTag t, SymMulti (Tree.Node (TextNode "\n") _)] = t
 
-treeify [] [(SymMulti ts)] = Node "html" Data.Map.empty ts
+treeify [] [(SymMulti (Tree.Node _ ts))] = Tree.Node (HTML.Node "html" Data.Map.empty) ts
 
-treeify input ((SymTag t) : (SymMulti ts) : rest) = treeify input ((SymMulti (ts ++ [t])) : rest)
+treeify input ((SymTag t) : (SymMulti (Tree.Node _ ts)) : rest) = treeify input ((SymMulti (Tree.Node HTML.NullTag (ts ++ [t]))) : rest)
 
-treeify input ((SymTag t) : rest) = treeify input ((SymMulti [t]) : rest)
+treeify input ((SymTag t) : rest) = treeify input ((SymMulti (Tree.Node HTML.NullTag [t] )) : rest)
 
-treeify input ((SymBeginTag "link" attrs) : rest) = treeify input ((SymTag (Node "link" (Data.Map.fromList attrs) [])) : rest)
+treeify input ((SymBeginTag "link" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "link" (Data.Map.fromList attrs)) [])) : rest)
 
-treeify input ((SymBeginTag "meta" attrs) : rest) = treeify input ((SymTag (Node "meta" (Data.Map.fromList attrs) [])) : rest)
+treeify input ((SymBeginTag "meta" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "meta" (Data.Map.fromList attrs)) [])) : rest)
 
-treeify input ((SymEndTag name) : (SymMulti ts) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Node name (Data.Map.fromList attrs) ts)) : rest)
+treeify input ((SymEndTag name) : (SymMulti (Tree.Node _ ts)) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name (Data.Map.fromList attrs)) ts)) : rest)
 
-treeify input ((SymEndTag name) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Node name (Data.Map.fromList attrs) [])) : rest)
+treeify input ((SymEndTag name) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name (Data.Map.fromList attrs)) [])) : rest)
 
 treeify (a : rest) stack = treeify rest (a : stack)

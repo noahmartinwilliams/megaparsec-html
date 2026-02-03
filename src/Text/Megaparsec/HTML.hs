@@ -1,5 +1,8 @@
 module Text.Megaparsec.HTML(htmlDoc, 
-Doc(..))
+HTMLParser(..), 
+Doc(..), 
+DTD(..), 
+Tag(CSSNode, JSNode, Node, TextNode))
 where
 
 import Text.Megaparsec.HTML.DTD
