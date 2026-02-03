@@ -35,7 +35,7 @@ main = do
     let results = (Prelude.map parser (Prelude.zip args' args) ) `using` (parBuffer numCapabilities rdeepseq)
         result = Prelude.foldr (Main.and) (True, "") results
     if fst result
-    then
+    then 
         exitWith ExitSuccess
     else do
         let (_, str) = result

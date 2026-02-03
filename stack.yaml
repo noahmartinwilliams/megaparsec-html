@@ -70,4 +70,4 @@ extra-deps:
 - git: https://github.com/noahmartinwilliams/megaparsec-js.git
   commit: 681049229d1ea10bd13fdc36173750ffe72b3bdf
 - git: https://github.com/noahmartinwilliams/megaparsec-css.git
-  commit: 9e2167175c9a552b6643c3f495af3ea4050bd271
+  commit: 2b9d16d04c2d5df2cd67f961b9265bfaf40dd85a
