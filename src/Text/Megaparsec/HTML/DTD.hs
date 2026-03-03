@@ -15,11 +15,11 @@ htmlDTD = do
     void $ hspace
     void $ S.lexeme (string "html")
     void $ hspace
-    void $ S.lexeme (string "PUBLIC")
+    void $ S.lexeme (optional ((string "PUBLIC")))
     void $ hspace
-    first <- (htmlString)
+    first <- optional (htmlString)
     void $ hspace
-    second <- (htmlString)
+    second <- optional (htmlString)
     void $ hspace
     void $ (single '>')
     void $ space

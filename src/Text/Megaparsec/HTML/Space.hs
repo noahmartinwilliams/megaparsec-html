@@ -9,7 +9,7 @@ import Text.Megaparsec.HTML.Types
 import qualified Text.Megaparsec.Char.Lexer as L
 
 sc :: HTMLParser ()
-sc = L.space space1 empty empty
+sc = L.space space1 empty (L.skipBlockComment "<!--" "-->")
 
 lexeme :: HTMLParser a -> HTMLParser a
 lexeme = L.lexeme sc

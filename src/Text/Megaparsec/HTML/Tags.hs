@@ -27,17 +27,17 @@ htmlBeginTag = do
     attrs <- htmlAttrs
     void $ Ch.space
     void $ notFollowedBy (single '/')
-    void $ (single '>')
+    void $ S.lexeme (single '>')
     if name == "script"
     then do
         jsd <- htmlEmbeddedJS
-        void $ htmlEndTag
+        void $ S.lexeme htmlEndTag
         let (jsd', _) = jsd
         return (SymTag (Tree.Node (JSNode name (Data.Map.fromList attrs) jsd') []))
     else if name == "style"
     then do
         cssd <- htmlEmbeddedCSS
-        void $ htmlEndTag 
+        void $ S.lexeme htmlEndTag 
         return (SymTag (Tree.Node (CSSNode name (Data.Map.fromList attrs) cssd) []))
     else
         return (SymBeginTag name attrs)
@@ -49,7 +49,7 @@ htmlEndTag = do
     void $ Ch.space
     ident <- some (alphaNumChar)
     void $ Ch.space
-    void $ (single '>')
+    void $ S.lexeme (single '>')
     return (SymEndTag ident)
 
 htmlSingleTag :: HTMLParser Symbol
@@ -62,7 +62,7 @@ htmlSingleTag = do
     attrs <- htmlAttrs 
     let attrs2 = Data.Map.fromList attrs
     void $ Ch.space
-    void $ (string "/>")
+    void $ S.lexeme (string "/>")
     return (SymTag (Tree.Node (HTML.Node name attrs2) []))
 
 htmlAttr :: HTMLParser (String, String)
