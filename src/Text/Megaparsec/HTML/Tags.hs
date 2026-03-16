@@ -5,6 +5,7 @@ import Control.Monad
 import Control.Monad.State
 import Data.Either
 import Data.Map
+import Data.Maybe
 import Data.Set
 import Data.Tree as Tree
 import Data.Void
@@ -18,6 +19,11 @@ import Text.Megaparsec.JS as JS
 
 data Symbol = SymMulti (Tree Tag) | SymBeginTag String [(String, String)] | SymTag (Tree Tag) | SymEndTag String deriving(Show, Eq)
 
+htmlEndJSTag :: HTMLParser (Maybe (JS.Doc, Text.Megaparsec.State String Void))
+htmlEndJSTag = do
+    void $ string "</script>"
+    return Nothing
+
 htmlBeginTag :: HTMLParser Symbol
 htmlBeginTag = do
     void $ single '<'
@@ -30,10 +36,14 @@ htmlBeginTag = do
     void $ S.lexeme (single '>')
     if name == "script"
     then do
-        jsd <- htmlEmbeddedJS
-        void $ S.lexeme htmlEndTag
-        let (jsd', _) = jsd
-        return (SymTag (Tree.Node (JSNode name (Data.Map.fromList attrs) jsd') []))
+        jsd <- S.lexeme (try htmlEndJSTag <|> try htmlEmbeddedJS)
+        if isJust jsd
+        then do
+            void $ S.lexeme htmlEndTag
+            let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name (Data.Map.fromList attrs) (Just jsd')) []))
+        else
+            return (SymTag (Tree.Node (JSNode name (Data.Map.fromList attrs) Nothing) []))
+
     else if name == "style"
     then do
         cssd <- htmlEmbeddedCSS
@@ -65,6 +75,15 @@ htmlSingleTag = do
     void $ S.lexeme (string "/>")
     return (SymTag (Tree.Node (HTML.Node name attrs2) []))
 
+htmlAttr' :: HTMLParser (String, String)
+htmlAttr' = (try htmlDefer) <|> (try htmlAttr)
+
+htmlDefer :: HTMLParser (String, String)
+htmlDefer = do
+    void $ S.lexeme (string "defer")
+    void $ notFollowedBy (S.lexeme (single '='))
+    return ("defer", "")
+
 htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
     name <- S.lexeme (some (alphaNumChar <|> single '-'))
@@ -84,10 +103,11 @@ htmlString = do
             (char '\\' >> return '\\')
 
 htmlAttrs :: HTMLParser [(String, String)]
-htmlAttrs = many htmlAttr
+htmlAttrs = many htmlAttr'
 
-htmlEmbeddedJS :: HTMLParser (JS.Doc, Text.Megaparsec.State String Void)
+htmlEmbeddedJS :: HTMLParser (Maybe (JS.Doc, Text.Megaparsec.State String Void))
 htmlEmbeddedJS = do
+    void $ notFollowedBy (string "</script>")
     i <- getInput
     o <- getOffset
     st <- getParserState
@@ -101,7 +121,7 @@ htmlEmbeddedJS = do
             (Text.Megaparsec.State { stateOffset = so, stateInput = si }) = st''
         setInput si
         setOffset so
-        return (jsd, st'')
+        return (Just (jsd, st''))
 
 htmlEmbeddedCSS :: HTMLParser CSSDoc
 htmlEmbeddedCSS = do
@@ -131,7 +151,7 @@ htmlNode = do
     let (node1 : _) = nodes
     if (isBeginTag node1)
     then
-        return (treeify nodes [])
+        (treeify nodes [])
     else
         fancyFailure (Data.Set.fromList [ErrorFail "Document does not begin with a start tag."])
 
@@ -139,13 +159,13 @@ isBeginTag :: Symbol -> Bool
 isBeginTag (SymBeginTag _ _ ) = True
 isBeginTag _ = False
 
-treeify :: [Symbol] -> [Symbol] -> Tree Tag
+treeify :: [Symbol] -> [Symbol] -> HTMLParser (Tree Tag)
 
-treeify [] [SymTag t] = t
+treeify [] [SymTag t] = return t
 
-treeify [] [SymTag t, SymMulti (Tree.Node (TextNode "\n") _)] = t
+treeify [] [SymTag t, SymMulti (Tree.Node (TextNode "\n") _)] = return t
 
-treeify [] [(SymMulti (Tree.Node _ ts))] = Tree.Node (HTML.Node "html" Data.Map.empty) ts
+treeify [] [(SymMulti (Tree.Node _ ts))] = return (Tree.Node (HTML.Node "html" Data.Map.empty) ts)
 
 treeify input ((SymTag t) : (SymMulti (Tree.Node _ ts)) : rest) = treeify input ((SymMulti (Tree.Node HTML.NullTag (ts ++ [t]))) : rest)
 
@@ -160,3 +180,5 @@ treeify input ((SymEndTag name) : (SymMulti (Tree.Node _ ts)) : (SymBeginTag nam
 treeify input ((SymEndTag name) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name (Data.Map.fromList attrs)) [])) : rest)
 
 treeify (a : rest) stack = treeify rest (a : stack)
+
+treeify [] (a : _) = let err = "Reached end of input before tags closed. Last tag: " ++ (show a) in fancyFailure (Data.Set.fromList [(ErrorFail err)])

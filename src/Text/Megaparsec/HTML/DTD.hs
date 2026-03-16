@@ -11,7 +11,7 @@ import Text.Megaparsec.HTML.Tags
 htmlDTD :: HTMLParser DTD
 htmlDTD = do
     void $ S.lexeme (string "<!")
-    void $ S.lexeme (string "DOCTYPE")
+    void $ S.lexeme ((string "DOCTYPE") <|> (string "doctype"))
     void $ hspace
     void $ S.lexeme (string "html")
     void $ hspace
