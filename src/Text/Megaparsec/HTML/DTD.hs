@@ -1,7 +1,6 @@
 module Text.Megaparsec.HTML.DTD where
 
 import Control.Monad
-import Data.Text as T
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.HTML.Types

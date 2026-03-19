@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.39.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -27,6 +27,7 @@ library
   exposed-modules:
       Text.Megaparsec.HTML
       Text.Megaparsec.HTML.DTD
+      Text.Megaparsec.HTML.JS
       Text.Megaparsec.HTML.Space
       Text.Megaparsec.HTML.Tags
       Text.Megaparsec.HTML.Text

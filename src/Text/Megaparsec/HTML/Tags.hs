@@ -12,17 +12,12 @@ import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.CSS as CSS
+import Text.Megaparsec.HTML.JS
 import Text.Megaparsec.HTML.Space as S
 import Text.Megaparsec.HTML.Text
 import Text.Megaparsec.HTML.Types as HTML
-import Text.Megaparsec.JS as JS
 
 data Symbol = SymMulti (Tree Tag) | SymBeginTag String [(String, String)] | SymTag (Tree Tag) | SymEndTag String deriving(Show, Eq)
-
-htmlEndJSTag :: HTMLParser (Maybe (JS.Doc, Text.Megaparsec.State String Void))
-htmlEndJSTag = do
-    void $ string "</script>"
-    return Nothing
 
 htmlBeginTag :: HTMLParser Symbol
 htmlBeginTag = do
@@ -34,21 +29,27 @@ htmlBeginTag = do
     void $ Ch.space
     void $ notFollowedBy (single '/')
     void $ S.lexeme (single '>')
+    let attrs' = Data.Map.fromList attrs
     if name == "script"
     then do
-        jsd <- S.lexeme (try htmlEndJSTag <|> try htmlEmbeddedJS)
-        if isJust jsd
+        if isFollowedByJS attrs'
         then do
+            jsd <- S.lexeme (try htmlEndJSTag <|> try htmlEmbeddedJS)
+            if isJust jsd
+            then do
+                void $ S.lexeme htmlEndTag
+                let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
+            else
+                return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
+        else do
             void $ S.lexeme htmlEndTag
-            let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name (Data.Map.fromList attrs) (Just jsd')) []))
-        else
-            return (SymTag (Tree.Node (JSNode name (Data.Map.fromList attrs) Nothing) []))
+            return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
 
     else if name == "style"
     then do
         cssd <- htmlEmbeddedCSS
         void $ S.lexeme htmlEndTag 
-        return (SymTag (Tree.Node (CSSNode name (Data.Map.fromList attrs) cssd) []))
+        return (SymTag (Tree.Node (CSSNode name attrs' cssd) []))
     else
         return (SymBeginTag name attrs)
 
@@ -105,23 +106,6 @@ htmlString = do
 htmlAttrs :: HTMLParser [(String, String)]
 htmlAttrs = many htmlAttr'
 
-htmlEmbeddedJS :: HTMLParser (Maybe (JS.Doc, Text.Megaparsec.State String Void))
-htmlEmbeddedJS = do
-    void $ notFollowedBy (string "</script>")
-    i <- getInput
-    o <- getOffset
-    st <- getParserState
-    let st' = State { stateInput = i, stateOffset = o, statePosState = (statePosState st), stateParseErrors = []}
-        ((st'', jsr), _) = runState (runParserT' jsDoc st' ) JS.jsInitialState
-    if isLeft jsr
-    then
-        let (Left err) = jsr in fancyFailure (Data.Set.fromList [(ErrorFail (errorBundlePretty err))])
-    else do
-        let (Right (jsd, _)) = jsr
-            (Text.Megaparsec.State { stateOffset = so, stateInput = si }) = st''
-        setInput si
-        setOffset so
-        return (Just (jsd, st''))
 
 htmlEmbeddedCSS :: HTMLParser CSSDoc
 htmlEmbeddedCSS = do
