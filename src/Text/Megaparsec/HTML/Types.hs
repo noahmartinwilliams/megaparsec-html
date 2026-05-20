@@ -13,4 +13,4 @@ data Tag = NullTag | CSSNode String (Map String String) CSSDoc | JSNode String (
 
 data DTD = DTD (Maybe String) (Maybe String) deriving(Show, Eq)
 
-data Doc = Doc DTD (Tree Tag) deriving(Show, Eq)
+data Doc = Doc (Maybe DTD) (Tree Tag) deriving(Show, Eq)

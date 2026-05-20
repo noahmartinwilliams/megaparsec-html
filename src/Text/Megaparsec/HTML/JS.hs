@@ -30,7 +30,7 @@ htmlEmbeddedJS = do
         ((st'', jsr), _) = runState (runParserT' jsDoc st' ) JS.jsInitialState
     if isLeft jsr
     then
-        let (Left err) = jsr in fancyFailure (Data.Set.fromList [(ErrorFail (errorBundlePretty err))])
+        let (Left err) = jsr in (fancyFailure (Data.Set.fromList [(ErrorFail (errorBundlePretty err))]))
     else do
         let (Right (jsd, _)) = jsr
             (Text.Megaparsec.State { stateOffset = so, stateInput = si }) = st''
@@ -43,6 +43,10 @@ isFollowedByJS m = noSrc m where
     noSrc :: Map String String -> Bool
     noSrc inp = do
         let res = Data.Map.lookup "src" inp
+        let res' = Data.Map.lookup "type" inp
         case res of
-            Nothing -> True
+            Nothing -> do
+                case res' of
+                    Nothing -> False
+                    (Just "text/javascript") -> True
             (Just _) -> False

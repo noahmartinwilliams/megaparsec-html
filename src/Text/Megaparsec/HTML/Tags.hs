@@ -30,28 +30,27 @@ htmlBeginTag = do
     void $ notFollowedBy (single '/')
     void $ S.lexeme (single '>')
     let attrs' = Data.Map.fromList attrs
-    if name == "script"
-    then do
-        if isFollowedByJS attrs'
-        then do
-            jsd <- S.lexeme (try htmlEndJSTag <|> try htmlEmbeddedJS)
-            if isJust jsd
+    case name of 
+        "script" -> do
+            if isFollowedByJS attrs'
             then do
+                jsd <- S.lexeme (try htmlEndJSTag <|> try htmlEmbeddedJS)
+                if isJust jsd
+                then do
+                    void $ S.lexeme htmlEndTag
+                    let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
+                else
+                    return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
+            else do
                 void $ S.lexeme htmlEndTag
-                let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
-            else
                 return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
-        else do
-            void $ S.lexeme htmlEndTag
-            return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
 
-    else if name == "style"
-    then do
-        cssd <- htmlEmbeddedCSS
-        void $ S.lexeme htmlEndTag 
-        return (SymTag (Tree.Node (CSSNode name attrs' cssd) []))
-    else
-        return (SymBeginTag name attrs)
+        "style" -> do
+            cssd <- htmlEmbeddedCSS
+            void $ S.lexeme htmlEndTag 
+            return (SymTag (Tree.Node (CSSNode name attrs' cssd) []))
+
+        _ -> return (SymBeginTag name attrs)
 
 htmlEndTag :: HTMLParser Symbol
 htmlEndTag = do
@@ -131,7 +130,8 @@ htmlText = do
 
 htmlNode :: HTMLParser (Tree Tag)
 htmlNode = do
-    nodes <- some (try htmlText <|> try htmlBeginTag <|> try htmlEndTag <|> try htmlSingleTag)
+    nodes <- some (try htmlText <|> try htmlEndTag <|> try htmlSingleTag <|> htmlBeginTag)
+    void $ optional (lexeme (single '\n'))
     let (node1 : _) = nodes
     if (isBeginTag node1)
     then
@@ -155,9 +155,15 @@ treeify input ((SymTag t) : (SymMulti (Tree.Node _ ts)) : rest) = treeify input 
 
 treeify input ((SymTag t) : rest) = treeify input ((SymMulti (Tree.Node HTML.NullTag [t] )) : rest)
 
-treeify input ((SymBeginTag "link" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "link" (Data.Map.fromList attrs)) [])) : rest)
+treeify input ((SymBeginTag "link" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "link" (Data.Map.fromList attrs)) [])) : rest) -- Some HTML Pages don't treat these as single tags, even though they should.
 
 treeify input ((SymBeginTag "meta" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "meta" (Data.Map.fromList attrs)) [])) : rest)
+
+treeify input ((SymBeginTag "br" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "br" (Data.Map.fromList attrs)) [])) : rest)
+
+treeify input ((SymBeginTag "hr" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "hr" (Data.Map.fromList attrs)) [])) : rest)
+
+treeify input ((SymBeginTag "img" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "img" (Data.Map.fromList attrs)) [])) : rest)
 
 treeify input ((SymEndTag name) : (SymMulti (Tree.Node _ ts)) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name (Data.Map.fromList attrs)) ts)) : rest)
 
