@@ -21,7 +21,7 @@ data Symbol = SymMulti (Tree Tag) | SymBeginTag String [(String, String)] | SymT
 
 htmlBeginTag :: HTMLParser Symbol
 htmlBeginTag = do
-    void $ single '<'
+    void $ ( single '<' )
     void $ notFollowedBy (single '/')
     name <- (some alphaNumChar)
     void $ Ch.space
@@ -130,7 +130,7 @@ htmlText = do
 
 htmlNode :: HTMLParser (Tree Tag)
 htmlNode = do
-    nodes <- some (try htmlText <|> try htmlEndTag <|> try htmlSingleTag <|> htmlBeginTag)
+    nodes <- some (try (S.lexeme htmlText) <|> try (S.lexeme htmlEndTag) <|> try (S.lexeme htmlSingleTag) <|> (S.lexeme htmlBeginTag))
     void $ optional (lexeme (single '\n'))
     let (node1 : _) = nodes
     if (isBeginTag node1)
