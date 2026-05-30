@@ -8,6 +8,7 @@ import Data.Maybe
 import Data.Set
 import Data.Tree as Tree
 import Data.Void
+import Debug.Trace
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.Char as Ch
@@ -49,4 +50,18 @@ isFollowedByJS m = noSrc m where
                 case res' of
                     Nothing -> False
                     (Just "text/javascript") -> True
+                    notRight -> (trace (show notRight) False)
             (Just _) -> False
+
+isFollowedByJSON :: Map String String -> Bool
+isFollowedByJSON inp = do
+    let res = Data.Map.lookup "src" inp
+        res' = Data.Map.lookup "type" inp
+    case res of
+        Nothing -> do
+            case res' of
+                Nothing -> False
+                (Just "application/ld+json") -> True
+                (Just _) -> False
+
+        (Just _) -> False

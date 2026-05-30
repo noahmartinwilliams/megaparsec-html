@@ -13,6 +13,7 @@ import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.CSS as CSS
 import Text.Megaparsec.HTML.JS
+import Text.Megaparsec.HTML.JSON
 import Text.Megaparsec.HTML.Space as S
 import Text.Megaparsec.HTML.Text
 import Text.Megaparsec.HTML.Types as HTML
@@ -41,6 +42,11 @@ htmlBeginTag = do
                     let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
                 else
                     return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
+            else if (isFollowedByJSON attrs')
+            then do
+                jsond <- htmlJSON
+                void $ S.lexeme htmlEndTag
+                return (SymTag (Tree.Node (JSONNode name attrs' jsond) []))
             else do
                 void $ S.lexeme htmlEndTag
                 return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
