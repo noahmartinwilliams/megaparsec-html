@@ -37,10 +37,13 @@ htmlBeginTag = do
             modify (addScript attrs') 
             if isFollowedByJS attrs'
             then do
-                jsd <- S.lexeme (htmlEmbeddedJS)
+                jsd <- optional (S.lexeme (htmlEmbeddedJS))
                 void $ S.lexeme htmlEndJSTag
-                let (jsd', _) = jsd 
-                return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
+                if isNothing jsd
+                then
+                    return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
+                else 
+                    let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
             else if (isFollowedByJSON attrs')
             then do
                 jsond <- htmlJSON
@@ -91,7 +94,7 @@ htmlDefer = do
 
 htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
-    name <- S.lexeme (some (alphaNumChar <|> single '-'))
+    name <- S.lexeme (some (alphaNumChar <|> single '-' <|> single '_'))
     void $ S.lexeme (single '=')
     val <- S.lexeme (htmlString)
     return (name, val)
