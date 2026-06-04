@@ -8,12 +8,11 @@ import Data.Maybe
 import Data.Set
 import Data.Tree as Tree
 import Data.Void
-import Debug.Trace
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.HTML.Space as S
-import Text.Megaparsec.HTML.Types
+import Text.Megaparsec.HTML.Types as HTML
 import Text.Megaparsec.JS as JS
 
 htmlEndJSTag :: HTMLParser ()
@@ -47,6 +46,8 @@ isFollowedByJS m = noSrc m where
                 case res' of
                     Nothing -> True
                     (Just "text/javascript") -> True
-                    notRight -> (trace (show notRight) False)
+                    notRight -> False
             (Just _) -> False
 
+addScript :: Map String String -> HTML.ParserState -> HTML.ParserState
+addScript m st = st { htmlExternScripts = (m : (htmlExternScripts st))}

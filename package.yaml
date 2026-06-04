@@ -40,9 +40,11 @@ executables:
     ghc-options:
     - -threaded 
     dependencies:
+    - containers
     - megaparsec
     - megaparsec-html
     - text
+    - mtl
     - parallel
 
 library:

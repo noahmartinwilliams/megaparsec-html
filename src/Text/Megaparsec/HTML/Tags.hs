@@ -15,10 +15,11 @@ import Text.Megaparsec.CSS as CSS
 import Text.Megaparsec.HTML.JS
 import Text.Megaparsec.HTML.JSON
 import Text.Megaparsec.HTML.Space as S
+import Text.Megaparsec.HTML.State 
 import Text.Megaparsec.HTML.Text
 import Text.Megaparsec.HTML.Types as HTML
 
-data Symbol = SymMulti (Tree Tag) | SymBeginTag String [(String, String)] | SymTag (Tree Tag) | SymEndTag String deriving(Show, Eq)
+data Symbol = SymMulti (Tree Tag) | SymBeginTag String (Map String String) | SymTag (Tree Tag) | SymEndTag String deriving(Show, Eq)
 
 htmlBeginTag :: HTMLParser Symbol
 htmlBeginTag = do
@@ -33,6 +34,7 @@ htmlBeginTag = do
     let attrs' = Data.Map.fromList attrs
     case name of 
         "script" -> do
+            modify (addScript attrs') 
             if isFollowedByJS attrs'
             then do
                 jsd <- S.lexeme (htmlEmbeddedJS)
@@ -53,7 +55,7 @@ htmlBeginTag = do
             void $ S.lexeme htmlEndTag 
             return (SymTag (Tree.Node (CSSNode name attrs' cssd) []))
 
-        _ -> return (SymBeginTag name attrs)
+        _ -> return (SymBeginTag name attrs')
 
 htmlEndTag :: HTMLParser Symbol
 htmlEndTag = do
@@ -158,19 +160,22 @@ treeify input ((SymTag t) : (SymMulti (Tree.Node _ ts)) : rest) = treeify input 
 
 treeify input ((SymTag t) : rest) = treeify input ((SymMulti (Tree.Node HTML.NullTag [t] )) : rest)
 
-treeify input ((SymBeginTag "link" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "link" (Data.Map.fromList attrs)) [])) : rest) -- Some HTML Pages don't treat these as single tags, even though they should.
+treeify input ((SymBeginTag "link" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "link" attrs) [])) : rest) -- Some HTML Pages don't treat these as single tags, even though they should.
 
-treeify input ((SymBeginTag "meta" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "meta" (Data.Map.fromList attrs)) [])) : rest)
+treeify input ((SymBeginTag "meta" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "meta" attrs) [])) : rest)
 
-treeify input ((SymBeginTag "br" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "br" (Data.Map.fromList attrs)) [])) : rest)
+treeify input ((SymBeginTag "br" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "br" attrs) [])) : rest)
 
-treeify input ((SymBeginTag "hr" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "hr" (Data.Map.fromList attrs)) [])) : rest)
+treeify input ((SymBeginTag "hr" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "hr" attrs) [])) : rest)
 
-treeify input ((SymBeginTag "img" attrs) : rest) = treeify input ((SymTag (Tree.Node (HTML.Node "img" (Data.Map.fromList attrs)) [])) : rest)
+treeify input ((SymBeginTag "img" attrs) : rest) = do
+    modify (addImg attrs)
+    t <- treeify input ((SymTag (Tree.Node (HTML.Node "img" attrs) [])) : rest)
+    return t
 
-treeify input ((SymEndTag name) : (SymMulti (Tree.Node _ ts)) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name (Data.Map.fromList attrs)) ts)) : rest)
+treeify input ((SymEndTag name) : (SymMulti (Tree.Node _ ts)) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name attrs) ts)) : rest)
 
-treeify input ((SymEndTag name) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name (Data.Map.fromList attrs)) [])) : rest)
+treeify input ((SymEndTag name) : (SymBeginTag name' attrs) : rest) | name == name' = treeify input ((SymTag (Tree.Node (HTML.Node name attrs) [])) : rest)
 
 treeify (a : rest) stack = treeify rest (a : stack)
 

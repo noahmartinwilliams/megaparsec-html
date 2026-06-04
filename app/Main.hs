@@ -1,43 +1,58 @@
 module Main where
 
+import Args
+import Control.Monad.Reader
+import Control.Monad.State
 import Control.Parallel.Strategies
 import Data.Either
 import GHC.Conc
+import Maps
+import System.Console.GetOpt
 import System.Environment
 import System.Exit
 import System.IO
 import Text.Megaparsec
-import Text.Megaparsec.HTML
+import Text.Megaparsec.HTML as HTML
 
-parser :: (String, String) -> (Bool, String)
-parser (contents, fname) = do
-    let res = parse htmlDoc fname contents
-    if isLeft res
-    then
-        let (Left bundle) = res in (False, (errorBundlePretty bundle))
-    else
-        let (Right res') = res in (True, show res')
+catn :: [String] -> String
+catn ls = foldr (\x -> \y -> x ++ "\n" ++ y) "" ls
 
-openEach :: [String] -> IO [String]
-openEach [] = return []
-openEach (head : tail) = do
-    fd <- readFile head
-    rest <- openEach tail
-    return (fd : rest)
-
-and :: (Bool, String) -> (Bool, String) -> (Bool, String)
-and (a, str) (b, str') = (a && b, str ++ str')
+getResults :: HTML.Doc -> ParserState -> Reader Opts String
+getResults doc st = do
+    pei <- reader printExternImgs
+    pes <- reader printExternScripts
+    let ret0 = if pei then catn (map (\x -> getAttrOrEmpty "src" x) (htmlExternImgs st)) else ""
+        ret1 = if pes then catn (map (\x -> getAttrOrEmpty "src" x) (htmlExternScripts st)) else ""
+    return (ret0 ++ ret1)
+        
+parser :: Reader Opts (Bool, String)
+parser = do
+    fname <- reader inputFileName
+    contents <- reader inputFile
+    let res = runParserT htmlDoc fname contents
+        (res', state') = runState res htmlDefaultState
+    case res' of
+        (Left bundle) -> return (False, (errorBundlePretty bundle))
+        (Right res'') -> do
+            result <- getResults res'' state'
+            return (True, result)
 
 main :: IO ()
 main = do
     args <- getArgs
-    args' <- openEach args
-    let results = (Prelude.map parser (Prelude.zip args' args) ) `using` (parBuffer numCapabilities rdeepseq)
-        result = Prelude.foldr (Main.and) (True, "") results
-    if fst result
-    then 
-        exitWith ExitSuccess
-    else do
-        let (_, str) = result
-        putStrLn str
-        exitWith (ExitFailure 1)
+    pname <- getProgName
+    let dopts = defaultOpts
+    case getOpt RequireOrder flags args of
+        (opts, _, []) -> do
+            let newOpts = (foldl (flip id) dopts opts)
+            f <- readFile (inputFileName newOpts)
+            let newOpts' = newOpts { inputFile = f }
+                rets = runReader parser newOpts'
+            case rets of
+                (True, p) -> putStrLn p
+                (False, e) -> do
+                    hPutStrLn stderr e
+                    exitFailure
+        (_, _, errs) -> do
+            hPutStrLn stderr ((concat errs) ++ "\n" ++ (usageInfo "htmlChecker" flags))
+            exitFailure
