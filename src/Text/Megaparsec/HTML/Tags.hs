@@ -37,13 +37,9 @@ htmlBeginTag = do
             modify (addScript attrs') 
             if isFollowedByJS attrs'
             then do
-                jsd <- optional (S.lexeme (htmlEmbeddedJS))
+                jsd <- (S.lexeme (htmlEmbeddedJS))
                 void $ S.lexeme htmlEndJSTag
-                if isNothing jsd
-                then
-                    return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
-                else 
-                    let (Just (jsd', _)) = jsd in return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
+                let (jsd', _) = jsd in return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
             else if (isFollowedByJSON attrs')
             then do
                 jsond <- htmlJSON
