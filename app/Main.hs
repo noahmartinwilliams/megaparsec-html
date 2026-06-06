@@ -21,9 +21,11 @@ getResults :: HTML.Doc -> ParserState -> Reader Opts String
 getResults doc st = do
     pei <- reader printExternImgs
     pes <- reader printExternScripts
+    pec <- reader printExternCSS
     let ret0 = if pei then catn (map (\x -> getAttrOrEmpty "src" x) (htmlExternImgs st)) else ""
         ret1 = if pes then catn (map (\x -> getAttrOrEmpty "src" x) (htmlExternScripts st)) else ""
-    return (ret0 ++ ret1)
+        ret2 = if pec then catn (map (\x -> getAttrOrEmpty "src" x) (htmlExternCSS st)) else ""
+    return (ret0 ++ ret1 ++ ret2)
         
 parser :: Reader Opts (Bool, String)
 parser = do

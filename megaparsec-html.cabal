@@ -26,7 +26,9 @@ source-repository head
 library
   exposed-modules:
       Text.Megaparsec.HTML
+      Text.Megaparsec.HTML.CSS
       Text.Megaparsec.HTML.DTD
+      Text.Megaparsec.HTML.Img
       Text.Megaparsec.HTML.JS
       Text.Megaparsec.HTML.JSON
       Text.Megaparsec.HTML.Space

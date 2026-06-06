@@ -11,7 +11,7 @@ import Text.Megaparsec.JSON as JSON
 
 type HTMLParser = ParsecT Void String (S.State Text.Megaparsec.HTML.Types.ParserState)
 
-data ParserState = ParserState { htmlExternScripts :: [Map String String], htmlExternImgs :: [Map String String]} deriving(Show, Eq)
+data ParserState = ParserState { htmlExternScripts :: [Map String String], htmlExternImgs :: [Map String String], htmlExternCSS :: [Map String String]} deriving(Show, Eq)
 
 data Tag = NullTag | 
     CSSNode String (Map String String) CSSDoc | 

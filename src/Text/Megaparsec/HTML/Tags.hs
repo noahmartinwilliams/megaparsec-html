@@ -11,7 +11,8 @@ import Data.Tree as Tree
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
-import Text.Megaparsec.CSS as CSS
+import Text.Megaparsec.HTML.CSS
+import Text.Megaparsec.HTML.Img
 import Text.Megaparsec.HTML.JS
 import Text.Megaparsec.HTML.JSON
 import Text.Megaparsec.HTML.Space as S
@@ -25,7 +26,7 @@ htmlBeginTag :: HTMLParser Symbol
 htmlBeginTag = do
     void $ ( single '<' )
     void $ notFollowedBy (single '/')
-    name <- (some alphaNumChar)
+    name <- (some (alphaNumChar))
     void $ Ch.space
     attrs <- htmlAttrs
     void $ Ch.space
@@ -52,6 +53,7 @@ htmlBeginTag = do
                 return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
 
         "style" -> do
+            modify (addStyle attrs')
             cssd <- htmlEmbeddedCSS
             void $ S.lexeme htmlEndTag 
             return (SymTag (Tree.Node (CSSNode name attrs' cssd) []))
@@ -92,7 +94,7 @@ htmlDefer = do
 
 htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
-    name <- S.lexeme (some (alphaNumChar <|> single '-' <|> single '_'))
+    name <- S.lexeme (some (alphaNumChar <|> single '-' <|> single '_' <|> single ':'))
     void $ S.lexeme (single '=')
     val <- S.lexeme (htmlString)
     return (name, val)
@@ -110,24 +112,6 @@ htmlString = do
 
 htmlAttrs :: HTMLParser [(String, String)]
 htmlAttrs = many htmlAttr'
-
-
-htmlEmbeddedCSS :: HTMLParser CSSDoc
-htmlEmbeddedCSS = do
-    i <- getInput
-    o <- getOffset
-    st' <- getParserState
-    let st = State { stateInput = i, stateOffset = o, stateParseErrors = [], statePosState = (statePosState st') }
-        css = (runParser' cssDoc st) 
-        (Text.Megaparsec.State { stateOffset = sto, stateInput = sti}, cssDE) = css
-    if isLeft cssDE
-    then
-        let (Left a) = cssDE in fancyFailure (Data.Set.fromList [ErrorFail (errorBundlePretty a)])
-    else do
-        let (Right cssD) = cssDE
-        setInput sti
-        setOffset sto
-        return cssD
 
 htmlText :: HTMLParser Symbol
 htmlText = do
