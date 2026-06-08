@@ -10,7 +10,7 @@ import Data.Tree as Tree
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
-import Text.Megaparsec.Char as Ch
+import Text.Megaparsec.Error
 import Text.Megaparsec.HTML.Space as S
 import Text.Megaparsec.HTML.Types as HTML
 import Text.Megaparsec.JS as JS
@@ -26,7 +26,7 @@ htmlEmbeddedJS = do
     o <- getOffset
     st <- getParserState
     let st' = State { stateInput = i, stateOffset = o, statePosState = (statePosState st), stateParseErrors = []}
-        ((st'', jsr), _) = runState (runParserT' jsDoc st' ) JS.jsInitialState
+        ((st'', jsr), _) = runState (runParserT' (jsDoc True) st' ) JS.jsInitialState
     case jsr of
         (Left err) -> fancyFailure (Data.Set.singleton (ErrorFail (errorBundlePretty err)))
         (Right (jsd, _)) -> do

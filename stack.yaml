@@ -68,7 +68,7 @@ packages:
 
 extra-deps:
 - git: https://github.com/noahmartinwilliams/megaparsec-js.git
-  commit: 8de05c64b1f40d89c9aa256cc120890eef16e425
+  commit: 74e20416c8bc46a6acf3107aa46bc698f7b19235
 - git: https://github.com/noahmartinwilliams/megaparsec-css.git
   commit: 82cb4ca9974c895fbde0519faa35db25fea8ff1c
 - git: https://github.com/noahmartinwilliams/megaparsec-json.git

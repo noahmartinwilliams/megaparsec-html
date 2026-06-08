@@ -12,6 +12,7 @@ import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char as Ch
 import Text.Megaparsec.HTML.CSS
+import Text.Megaparsec.HTML.Ident
 import Text.Megaparsec.HTML.Img
 import Text.Megaparsec.HTML.JS
 import Text.Megaparsec.HTML.JSON
@@ -38,11 +39,16 @@ htmlBeginTag = do
             modify (addScript attrs') 
             if isFollowedByJS attrs'
             then do
-                jsd <- optional (S.lexeme (htmlEmbeddedJS))
-                void $ S.lexeme htmlEndJSTag
+                st <- getParserState
+                jsd <- observing (S.lexeme (htmlEmbeddedJS))
                 case jsd of
-                    (Just (jsd', _)) -> return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
-                    Nothing -> return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
+                    (Left err) -> do
+                        if (errorOffset err) == (stateOffset st)
+                        then 
+                            return (SymTag (Tree.Node (JSNode name attrs' Nothing) []))
+                        else
+                            parseError err
+                    (Right (jsd', _)) -> return (SymTag (Tree.Node (JSNode name attrs' (Just jsd')) []))
             else if (isFollowedByJSON attrs')
             then do
                 jsond <- htmlJSON
@@ -65,7 +71,7 @@ htmlEndTag = do
     void $ lookAhead (string "</")
     void $ string "</"
     void $ Ch.space
-    ident <- some (alphaNumChar)
+    ident <- htmlIdent
     void $ Ch.space
     void $ S.lexeme (single '>')
     return (SymEndTag ident)
@@ -75,7 +81,7 @@ htmlSingleTag = do
     void $ S.lexeme (single '<')
     void $ notFollowedBy (single '/')
     void $ Ch.space
-    name <- (some alphaNumChar)
+    name <- htmlIdent
     void $ Ch.space
     attrs <- htmlAttrs 
     let attrs2 = Data.Map.fromList attrs
@@ -94,7 +100,7 @@ htmlDefer = do
 
 htmlAttr :: HTMLParser (String, String)
 htmlAttr = do
-    name <- S.lexeme (some (alphaNumChar <|> single '-' <|> single '_' <|> single ':'))
+    name <- htmlIdent
     void $ S.lexeme (single '=')
     val <- S.lexeme (htmlString)
     return (name, val)
